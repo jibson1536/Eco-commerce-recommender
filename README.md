@@ -1,4 +1,4 @@
-# co-commerce-recommender
+# Eco-commerce-recommender
 A hybrid recommendation system using NLP (Zero-Shot Classification) to rank e-commerce products by ESG sustainability metrics and combat greenwashing
 
 # Eco-Commerce Recommender: The Green-Product Engine 🌿
