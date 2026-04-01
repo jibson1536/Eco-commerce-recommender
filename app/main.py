@@ -2,16 +2,20 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import os
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Eco-Style Recommender", page_icon="🌿")
 
-# --- LOAD DATA ---
-@st.cache_data 
-def load_data():
-    df = pd.read_csv('data/handm_scored.csv')
-    return df
+# Get the directory that main.py is in
+base_path = os.path.dirname(__file__)
+# Go up one level (to the root) and then into data/
+file_path = os.path.join(base_path, "..", "data", "handm_scored.csv")
 
+@st.cache_data
+def load_data():
+    df = pd.read_csv(file_path)
+    return df
 df = load_data()
 
 # --- AI ENGINE ---
