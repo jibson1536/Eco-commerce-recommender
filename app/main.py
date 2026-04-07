@@ -117,8 +117,8 @@ if idx is not None:
              
     # --- NEW: SORT BY PRICE ---
     # We check for 'white_price' because that's the column in our H&M data
-    if 'white_price' in df.columns:
-        recs = sorted(recs, key=lambda x: x['white_price'])
+    if 'price' in df.columns:
+        recs = sorted(recs, key=lambda x: x['price'])
     
     # Trim back down to the user's requested number
     recs = recs[:num_recs]
@@ -131,7 +131,7 @@ if idx is not None:
                 st.info(f"**{item['productName']}**")
                 st.progress(int(item['sustainability_score']))
                 # Show the price so the user sees the "Value Nudge"
-                price_val = item.get('white_price', 'N/A')
+                price_val = item.get('price', 'N/A')
                 score_val = item.get('sustainability_score', 0)
 
                 st.write(f"Price: **${price_val}** | Score: **{score_val}**")
