@@ -131,4 +131,7 @@ if idx is not None:
                 st.info(f"**{item['productName']}**")
                 st.progress(int(item['sustainability_score']))
                 # Show the price so the user sees the "Value Nudge"
-                st.write(f"Price: **${item['white_price']}** | Score: **{item['sustainability_score']}**")
+                price_val = item.get('white_price', 'N/A')
+                score_val = item.get('sustainability_score', 0)
+
+                st.write(f"Price: **${price_val}** | Score: **{score_val}**")
