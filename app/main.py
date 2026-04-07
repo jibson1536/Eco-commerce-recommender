@@ -42,31 +42,35 @@ st.markdown("Find sustainable alternatives to your favorite fashion pieces.")
 col_search, col_drop = st.columns(2)
 
 with col_search:
-    search_query = st.text_input("🔍 Search by Style", placeholder="e.g. Blue Denim Jacket")
+    search_query = st.text_input("🔍 Search by Style", placeholder="e.g. Blue Denim Jacket", key="text_input")
 
 with col_drop:
-    product_list = ["None"] + list(df['productName'].unique())
-    selected_dropdown = st.selectbox("🎯 Or Pick from List", product_list)
+    # We add a clear 'Select...' option
+    product_options = ["Select a product..."] + list(df['productName'].unique())
+    selected_dropdown = st.selectbox("🎯 Or Pick from List", product_options, key="dropdown_input")
 
-# Determine the Target Index
+# --- SIMULTANEOUS LOGIC ---
 idx = None
-# 1. If the user picked something from the dropdown, use that
-if selected_dropdown != "":
-    idx = df[df['productName'] == selected_dropdown].index[0]
-# 2. If the dropdown is empty but there is text in the search box, use the search
-elif search_query:
+
+# Case A: User just typed in the search box
+if search_query and (st.session_state.get('last_query') != search_query):
     query_vec = tfidf.transform([search_query.lower()])
     search_sim = cosine_similarity(query_vec, tfidf_matrix)
     idx = search_sim.argmax()
+    st.session_state['last_query'] = search_query
+    # If they typed, we ignore the dropdown for a moment
+    
+# Case B: User just picked from the dropdown
+if selected_dropdown != "Select a product...":
+    # This check prevents the IndexError
+    match = df[df['productName'] == selected_dropdown]
+    if not match.empty:
+        idx = match.index[0]
 
-
-if search_query:
-    # Inference: Transform the text search into a vector
-    query_vec = tfidf.transform([search_query.lower()])
-    search_sim = cosine_similarity(query_vec, tfidf_matrix)
-    idx = search_sim.argmax()
-elif selected_dropdown != "None":
-    idx = df[df['productName'] == selected_dropdown].index[0]
+# If both are empty, don't show anything yet
+if idx is None and not search_query:
+    st.info("Start by typing a style above or picking an item from the list!")
+    st.stop() # Stops the rest of the app from running and crashing
 
 # --- DISPLAY RESULTS ---
 if idx is not None:
