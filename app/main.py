@@ -50,6 +50,15 @@ with col_drop:
 
 # Determine the Target Index
 idx = None
+# 1. If the user picked something from the dropdown, use that
+if selected_dropdown != "":
+    idx = df[df['productName'] == selected_dropdown].index[0]
+# 2. If the dropdown is empty but there is text in the search box, use the search
+elif search_query:
+    query_vec = tfidf.transform([search_query.lower()])
+    search_sim = cosine_similarity(query_vec, tfidf_matrix)
+    idx = search_sim.argmax()
+
 
 if search_query:
     # Inference: Transform the text search into a vector
@@ -97,20 +106,29 @@ if idx is not None:
     
     for i, score in sim_scores[1:]:
         row = df.iloc[i]
+        # Only keep if it hits the sustainability threshold
         if row['sustainability_score'] >= min_score and row['productName'] not in seen_names:
             recs.append(row)
             seen_names.add(row['productName'])
-        if len(recs) >= num_recs:
+        
+        # Collect a few extra so we have a pool to sort by price
+        if len(recs) >= (num_recs + 2): 
             break
              
-    # 3. Display Recommendations
+    # --- NEW: SORT BY PRICE ---
+    # We check for 'white_price' because that's the column in our H&M data
+    if 'white_price' in df.columns:
+        recs = sorted(recs, key=lambda x: x['white_price'])
+    
+    # Trim back down to the user's requested number
+    recs = recs[:num_recs]
+
+    # 3. Display Recommendations 
     if recs:
         rec_cols = st.columns(len(recs))
         for i, item in enumerate(recs):
             with rec_cols[i]:
                 st.info(f"**{item['productName']}**")
                 st.progress(int(item['sustainability_score']))
-                st.write(f"Score: **{item['sustainability_score']}/100**")
-                st.caption(f"Materials: {str(item['materials'])[:100]}...")
-    else:
-        st.warning("No sustainable alternatives found with those settings. Try lowering the 'Min Sustainability Score' in the sidebar!")
+                # Show the price so the user sees the "Value Nudge"
+                st.write(f"Price: **${item['white_price']}** | Score: **{item['sustainability_score']}**")
