@@ -5,80 +5,112 @@ from sklearn.metrics.pairwise import cosine_similarity
 import os
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Eco-Style Recommender", page_icon="🌿")
+st.set_page_config(page_title="Eco-Style Recommender", page_icon="🌿", layout="wide")
 
-# Get the directory that main.py is in
+# --- FILE PATHING ---
 base_path = os.path.dirname(__file__)
-# Go up one level (to the root) and then into data/
 file_path = os.path.join(base_path, "..", "data", "handm_scored.csv")
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv(file_path)
-    return df
+    return pd.read_csv(file_path)
+
 df = load_data()
 
 # --- AI ENGINE ---
 @st.cache_resource 
 def build_engine(data):
+    # We return both the matrix AND the vectorizer so we can transform new search queries
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(data['productName'] + " " + data['details'].fillna(''))
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    return cosine_sim
+    return tfidf, tfidf_matrix, cosine_sim
 
-cosine_sim = build_engine(df)
+# Unpack the engine components
+tfidf, tfidf_matrix, cosine_sim = build_engine(df)
 
-# --- UI LAYOUT ---
+# --- SIDEBAR FILTERS ---
+st.sidebar.header("🌿 Search Settings")
+min_score = st.sidebar.slider("Min Sustainability Score", 0, 100, 70)
+num_recs = st.sidebar.number_input("Number of recommendations", 1, 10, 3)
+
+# --- HEADER ---
 st.title("🌿 Eco-Style Recommender")
 st.markdown("Find sustainable alternatives to your favorite fashion pieces.")
 
-# Search Bar
-product_list = df['productName'].unique()
-selected_product = st.selectbox("Type a product name to start:", product_list)
-st.sidebar.header("Filter Settings")
-min_score = st.sidebar.slider("Minimum Sustainability Score", 0, 100, 70)
+# --- SEARCH INTERFACE ---
+col_search, col_drop = st.columns(2)
 
-if selected_product:
-    # Find the index of the selected item
-    idx = df[df['productName'] == selected_product].index[0]
+with col_search:
+    search_query = st.text_input("🔍 Search by Style", placeholder="e.g. Blue Denim Jacket")
+
+with col_drop:
+    product_list = ["None"] + list(df['productName'].unique())
+    selected_dropdown = st.selectbox("🎯 Or Pick from List", product_list)
+
+# Determine the Target Index
+idx = None
+
+if search_query:
+    # Inference: Transform the text search into a vector
+    query_vec = tfidf.transform([search_query.lower()])
+    search_sim = cosine_similarity(query_vec, tfidf_matrix)
+    idx = search_sim.argmax()
+elif selected_dropdown != "None":
+    idx = df[df['productName'] == selected_dropdown].index[0]
+
+# --- DISPLAY RESULTS ---
+if idx is not None:
     target = df.iloc[idx]
     
     st.divider()
     
-    # Show Selected Item
-    col1, col2 = st.columns(2)
+    # 1. Selected Item & Explainable AI
+    col1, col2 = st.columns([2, 1])
     with col1:
-        st.subheader("Selected Item")
-        st.write(f"**{target['productName']}**")
-        st.write(f"Category: {target['mainCatCode']}")
+        st.subheader(f"Current Style: {target['productName']}")
+        st.caption(f"Category: {target['mainCatCode']}")
+        
+        with st.expander("✨ Why this score?"):
+            score = target['sustainability_score']
+            if score >= 80:
+                st.success("🌟 This item is an **Eco-Champion**.")
+            elif score >= 50:
+                st.warning("⚖️ This item is a **Mixed Bag**.")
+            else:
+                st.error("⚠️ This item is **Conventional**.")
+            st.write(f"**Composition:** {target['materials']}")
+            
     with col2:
         st.metric("Sustainability Score", f"{target['sustainability_score']}/100")
 
     st.divider()
     
-    # RECOMMENDATION LOGIC 
-    st.subheader("🌿 Sustainable Alternatives")
+    # 2. Recommendation Logic
+    st.subheader("🌿 Highly Similar Sustainable Alternatives")
     
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     
     recs = []
-    seen_names = {selected_product}
+    seen_names = {target['productName']}
     
     for i, score in sim_scores[1:]:
         row = df.iloc[i]
-        if row['sustainability_score'] > 70 and row['productName'] not in seen_names:
+        if row['sustainability_score'] >= min_score and row['productName'] not in seen_names:
             recs.append(row)
             seen_names.add(row['productName'])
-        if len(recs) >= 3: break
-            
-    
-    # Display Recommendations in Columns
-    rec_cols = st.columns(3)
-    for i, item in enumerate(recs):
-        with rec_cols[i]:
-            st.info(f"**{item['productName']}**")
-            # This adds a visual progress bar!
-            st.progress(int(item['sustainability_score']))
-            st.write(f"Score: **{item['sustainability_score']}/100**")
-            st.caption(f"Category: {item['mainCatCode']}")
+        if len(recs) >= num_recs:
+            break
+             
+    # 3. Display Recommendations
+    if recs:
+        rec_cols = st.columns(len(recs))
+        for i, item in enumerate(recs):
+            with rec_cols[i]:
+                st.info(f"**{item['productName']}**")
+                st.progress(int(item['sustainability_score']))
+                st.write(f"Score: **{item['sustainability_score']}/100**")
+                st.caption(f"Materials: {str(item['materials'])[:100]}...")
+    else:
+        st.warning("No sustainable alternatives found with those settings. Try lowering the 'Min Sustainability Score' in the sidebar!")
